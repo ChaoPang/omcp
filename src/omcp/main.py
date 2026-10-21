@@ -1,7 +1,7 @@
 import os
 import sys
 import signal
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 import mcp
 from dotenv import load_dotenv, find_dotenv
 from omcp.config import langfuse, logger
@@ -319,15 +319,19 @@ transport_type = os.environ.get("MCP_TRANSPORT", "stdio").lower()
 host = os.environ.get("MCP_HOST", "localhost")
 port = int(os.environ.get("MCP_PORT", "8080"))
 
-# Validate transport type
-if transport_type not in ["stdio", "sse"]:
-    logger.error(f"Invalid transport type: {transport_type}. Must be 'stdio' or 'sse'.")
+# Validate transport type. "streamable-http" is MCP's current HTTP transport; "sse" is the
+# older (deprecated) one, kept for existing clients.
+TRANSPORTS = ["stdio", "sse", "streamable-http"]
+if transport_type not in TRANSPORTS:
+    logger.error(
+        f"Invalid transport type: {transport_type}. Must be one of {TRANSPORTS}."
+    )
     sys.exit(1)
 
 logger.info(f"Using {transport_type.upper()} transport")
 
-# Initialize FastMCP
-mcp_app = FastMCP(name="OMOP MCP Server")
+# Initialize the MCP server (mcp 2.x renamed FastMCP to MCPServer)
+mcp_app = MCPServer(name="OMOP MCP Server")
 
 # Initialize database with robust error handling
 try:
@@ -548,13 +552,11 @@ def main():
     try:
         if transport_type == "stdio":
             mcp_app.run(transport="stdio")
-        elif transport_type == "sse":
-            logger.info(f"Server will be available at http://{host}:{port}")
-            # Add initialization delay to prevent timing issues
-            import time
-
-            time.sleep(1)  # Give the server time to fully initialize
-            mcp_app.run(transport="sse")
+        else:
+            path = "/mcp" if transport_type == "streamable-http" else "/sse"
+            logger.info(f"Server will be available at http://{host}:{port}{path}")
+            # MCP_HOST/MCP_PORT are passed through; mcp 1.x's FastMCP ignored them and bound 0.0.0.0:8000.
+            mcp_app.run(transport=transport_type, host=host, port=port)
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
