@@ -394,6 +394,61 @@ def get_information_schema() -> mcp.types.CallToolResult:
 
 
 @mcp_app.tool(
+    name="Get_SQL_Dialect",
+    description="Get the SQL dialect to write Select_Query queries in, and the database's own dialect. "
+    "Call it before writing SQL: queries are written in this dialect and translated for the database.",
+)
+@capture_context(tool_name="Get_SQL_Dialect")
+def get_sql_dialect() -> mcp.types.CallToolResult:
+    """Report the dialect Select_Query accepts and the database's dialect."""
+    try:
+        info = db.get_sql_dialect()
+        text = f"Write queries in {info['query_dialect']} syntax.\nDatabase dialect: {info['database_dialect']}."
+        if info["translated"]:
+            text += f" Queries are translated from {info['query_dialect']} to {info['database_dialect']} before they run."
+        else:
+            text += " Queries run as written."
+        return mcp.types.CallToolResult(content=[mcp.types.TextContent(type="text", text=text)], _meta=info)
+    except Exception as e:
+        logger.error(f"Failed to get the SQL dialect: {e}")
+        return mcp.types.CallToolResult(
+            isError=True,
+            content=[mcp.types.TextContent(type="text", text=f"Failed to get the SQL dialect: {str(e)}")],
+        )
+
+
+@mcp_app.tool(
+    name="Get_CDM_Version",
+    description="Get the OMOP CDM version of the database, and its vocabulary version, from the cdm_source table. "
+    "Table and column names differ between CDM versions, such as 5.3 and 5.4.",
+)
+@capture_context(tool_name="Get_CDM_Version")
+def get_cdm_version() -> mcp.types.CallToolResult:
+    """Report the CDM and vocabulary versions recorded in cdm_source."""
+    try:
+        rows = db.get_cdm_version()
+        if not rows:
+            text = "The cdm_source table is empty, so the CDM version isn't recorded."
+        else:
+            lines = []
+            for row in rows:
+                version = f"CDM version: {row['cdm_version']}"
+                if row.get("cdm_version_concept_name"):
+                    version += f" ({row['cdm_version_concept_name']}, concept {row['cdm_version_concept_id']})"
+                lines += [version, f"Vocabulary version: {row['vocabulary_version']}", f"Dataset: {row['cdm_source_name']}"]
+            text = "\n".join(lines)
+        return mcp.types.CallToolResult(
+            content=[mcp.types.TextContent(type="text", text=text)], _meta={"cdm_source": rows}
+        )
+    except Exception as e:
+        logger.error(f"Failed to get the CDM version: {e}")
+        return mcp.types.CallToolResult(
+            isError=True,
+            content=[mcp.types.TextContent(type="text", text=f"Failed to get the CDM version: {str(e)}")],
+        )
+
+
+@mcp_app.tool(
     name="Select_Query", description="Execute a select query against the OMOP database."
 )
 @capture_context(tool_name="Select_Query")

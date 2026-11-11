@@ -24,6 +24,9 @@ except ImportError:
 from omcp.sql_validator import SQLValidator
 from omcp.transpiler import transpile_query
 
+# The dialect Select_Query accepts. Queries are translated from it to the database's dialect before they run.
+QUERY_DIALECT = "postgres"
+
 logger = logging.getLogger(__name__)
 
 
@@ -318,6 +321,32 @@ class OmopDatabase:
             self.conn = None
             raise ex.QueryError(f"Failed to get information schema: {str(e)}")
 
+    def get_sql_dialect(self) -> Dict[str, Any]:
+        """The dialect queries must be written in, and the database's own dialect."""
+        return {
+            "query_dialect": QUERY_DIALECT,
+            "database_dialect": self.target_dialect,
+            "translated": self.target_dialect != QUERY_DIALECT,
+        }
+
+    def get_cdm_version(self) -> List[Dict[str, Any]]:
+        """The CDM_SOURCE rows: dataset name, CDM version and its concept, and vocabulary version."""
+        self._ensure_connected()
+        try:
+            with self._conn_lock:
+                query = f"""
+                select s.cdm_source_name, s.cdm_version, s.cdm_version_concept_id,
+                       c.concept_name as cdm_version_concept_name, s.vocabulary_version
+                from {self.cdm_schema}.cdm_source s
+                left join {self.vocab_schema}.concept c on c.concept_id = s.cdm_version_concept_id
+                """
+                df = self._conn.sql(query).limit(10).execute()
+                return df.astype(object).where(df.notna(), None).to_dict(orient="records")
+        except Exception as e:
+            self._conn = None
+            self.conn = None
+            raise ex.QueryError(f"Failed to read the CDM version from cdm_source: {str(e)}")
+
     @lru_cache(maxsize=128)
     def read_query(self, query: str) -> str:
         """
@@ -344,7 +373,7 @@ class OmopDatabase:
 
             # Transpile query if needed (postgres -> databricks, etc.)
             # We assume Claude generates queries in postgres dialect by default
-            source_dialect = "postgres"
+            source_dialect = QUERY_DIALECT
             transpiled_query = query
 
             if self.target_dialect != source_dialect:
