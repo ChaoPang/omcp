@@ -54,8 +54,7 @@ class SQLValidator:
         allow_source_value_columns: bool = False,
         exclude_tables: t.List = None,
         exclude_columns: t.List = None,
-        from_dialect: str = "postgres",
-        to_dialect: str = "duckdb",
+        dialect: str = "postgres",
     ):
         """
         Initialize the SQLValidator with a list of allowed tables.
@@ -65,7 +64,10 @@ class SQLValidator:
             allow_source_values (bool): Flag to allow source values in validation.
             exclude_tables (list): A list of tables to exclude from validation.
             exclude_columns (list): A list of columns to exclude from validation.
+            dialect (str): The sqlglot dialect queries are written in, which is the database's.
         """
+
+        self.dialect: str = dialect
 
         self.allow_source_value_columns: bool = allow_source_value_columns
         self.exclude_tables: t.List = (
@@ -221,7 +223,7 @@ class SQLValidator:
 
         try:
             # Parse the SQL query
-            parsed_sql = sg.parse_one(sql)
+            parsed_sql = sg.parse_one(sql, read=self.dialect)
 
             # Validate the query to ensure it's a SELECT statement
 

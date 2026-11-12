@@ -4,7 +4,7 @@ import duckdb
 import pytest
 
 import omcp.exceptions as ex
-from omcp.db import QUERY_DIALECT, OmopDatabase
+from omcp.db import OmopDatabase
 
 
 def make_database(path, cdm_source_rows):
@@ -23,19 +23,21 @@ def make_database(path, cdm_source_rows):
     return OmopDatabase(f"duckdb:///{path}", cdm_schema="base", vocab_schema="base")
 
 
-def test_query_dialect_is_what_read_query_translates_from():
-    assert QUERY_DIALECT == "postgres"
-
-
-def test_dialect_on_duckdb_is_translated(tmp_path):
+def test_dialect_is_the_databases(tmp_path):
     db = make_database(tmp_path / "omop.duckdb", [])
-    assert db.get_sql_dialect() == {"query_dialect": "postgres", "database_dialect": "duckdb", "translated": True}
+    assert db.get_sql_dialect() == {"dialect": "duckdb"}
 
 
-def test_dialect_on_postgres_runs_as_written(tmp_path):
+def test_queries_are_validated_in_the_databases_dialect(tmp_path):
     db = make_database(tmp_path / "omop.duckdb", [])
-    db.target_dialect = "postgres"
-    assert db.get_sql_dialect()["translated"] is False
+    assert db.sql_validator.dialect == "duckdb"
+
+
+def test_query_runs_as_written_in_the_databases_dialect(tmp_path):
+    # list_value is DuckDB-only, so this fails if the query is read or rewritten as another dialect.
+    db = make_database(tmp_path / "omop.duckdb", [("Synthea", "5.4", 756265, "v5.0")])
+    csv = db.read_query("select len(list_value(cdm_version, vocabulary_version)) as n from base.cdm_source")
+    assert csv.splitlines() == ["n", "2"]
 
 
 def test_cdm_version_names_its_concept(tmp_path):

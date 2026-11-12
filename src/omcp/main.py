@@ -395,19 +395,15 @@ def get_information_schema() -> mcp.types.CallToolResult:
 
 @mcp_app.tool(
     name="Get_SQL_Dialect",
-    description="Get the SQL dialect to write Select_Query queries in, and the database's own dialect. "
-    "Call it before writing SQL: queries are written in this dialect and translated for the database.",
+    description="Get the SQL dialect of the database, which Select_Query queries must be written in. "
+    "Call it before writing SQL: queries are validated and run in this dialect, as written.",
 )
 @capture_context(tool_name="Get_SQL_Dialect")
 def get_sql_dialect() -> mcp.types.CallToolResult:
-    """Report the dialect Select_Query accepts and the database's dialect."""
+    """Report the database's dialect, which Select_Query accepts."""
     try:
         info = db.get_sql_dialect()
-        text = f"Write queries in {info['query_dialect']} syntax.\nDatabase dialect: {info['database_dialect']}."
-        if info["translated"]:
-            text += f" Queries are translated from {info['query_dialect']} to {info['database_dialect']} before they run."
-        else:
-            text += " Queries run as written."
+        text = f"Write queries in {info['dialect']} syntax. They run on the database as written."
         return mcp.types.CallToolResult(content=[mcp.types.TextContent(type="text", text=text)], _meta=info)
     except Exception as e:
         logger.error(f"Failed to get the SQL dialect: {e}")
